@@ -5,8 +5,9 @@
   "description": "Replaces 7TV, BTTV and FFZ emote names in Twitch chat with the emote images.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "chat-emotes@local",
-      "strict_min_version": "109.0"
+      "id": "twitch-chat-emotes@teekyy",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
     }
   },
   "permissions": [
