@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Twitch Chat Emotes",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Replaces 7TV, BTTV and FFZ emote names in Twitch chat with the emote images.",
   "icons": {
     "16": "icons/icon-16.png",
