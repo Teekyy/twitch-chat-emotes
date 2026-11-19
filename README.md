@@ -4,21 +4,22 @@ Firefox extension that shows 7TV, BetterTTV and FrankerFaceZ emotes in Twitch ch
 
 ## Install
 
-1. Clone this repo:
-   ```bash
-   git clone https://github.com/Teekyy/twitch-chat-emotes.git
-   ```
-2. In Firefox, open `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on** and select `manifest.json` from the cloned folder.
+Requires Firefox 140 or newer.
+
+1. Download the `.xpi` file from the [latest release](https://github.com/Teekyy/twitch-chat-emotes/releases/latest).
+2. Drag it into a Firefox window, or open `about:addons`, click the gear icon and choose **Install Add-on From File**.
+3. Click **Add** when Firefox asks for permission.
 4. Open a Twitch channel.
 
-Temporary add-ons are removed when Firefox restarts, so repeat steps 2–3 after a restart.
+The file is signed by Mozilla, so it stays installed after restarts.
 
 ## Privacy
 
 Runs only on `www.twitch.tv`. It requests emote lists and images from `7tv.io`, `api.betterttv.net`, `api.frankerfacez.com` and their CDNs. Those sites can see your IP and which channel you opened. No analytics, no other network calls, no remote code.
 
-## Files
+## Development
+
+To run from source, open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and select `manifest.json`. It is removed when Firefox restarts.
 
 - `background.js` fetches and merges the emote lists.
 - `content.js` and `content.css` swap emote names in chat for images.
