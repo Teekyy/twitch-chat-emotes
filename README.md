@@ -11,7 +11,7 @@ Requires Firefox 140 or newer.
 3. Click **Add** when Firefox asks for permission.
 4. Open a Twitch channel.
 
-The file is signed by Mozilla, so it stays installed after restarts.
+The file is signed by Mozilla, so it stays installed after restarts. Click the toolbar button to turn emotes on or off.
 
 ## Privacy
 
@@ -23,3 +23,4 @@ To run from source, open `about:debugging#/runtime/this-firefox`, click **Load T
 
 - `background.js` fetches and merges the emote lists.
 - `content.js` and `content.css` swap emote names in chat for images.
+- `icons/` holds the extension icons (`source.png` and `source-sleepy.png` are the original artwork).

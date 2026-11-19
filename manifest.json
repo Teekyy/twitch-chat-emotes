@@ -1,23 +1,37 @@
 {
   "manifest_version": 2,
-  "name": "Chat Emotes",
-  "version": "0.1.0",
+  "name": "Twitch Chat Emotes",
+  "version": "0.1.1",
   "description": "Replaces 7TV, BTTV and FFZ emote names in Twitch chat with the emote images.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "twitch-chat-emotes@teekyy",
       "strict_min_version": "140.0",
       "data_collection_permissions": { "required": ["none"] }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
     }
   },
   "permissions": [
+    "storage",
     "https://7tv.io/*",
     "https://api.betterttv.net/*",
-    "https://api.frankerfacez.com/*",
-    "https://cdn.7tv.app/*",
-    "https://cdn.betterttv.net/*",
-    "https://cdn.frankerfacez.com/*"
+    "https://api.frankerfacez.com/*"
   ],
+  "browser_action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    },
+    "default_title": "Twitch Chat Emotes"
+  },
   "background": {
     "scripts": ["background.js"],
     "persistent": false

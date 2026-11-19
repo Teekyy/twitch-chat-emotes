@@ -5,29 +5,12 @@ const WRAPPERS = new Set(["popout", "embed", "moderator"]);
 
 let login = null;
 let emotes = null; // Map of name -> { url, zw }, null until loaded
-const dataUrls = new Map();
+let enabled = null; // null until the saved setting is read
 
 function channelFromPath(path) {
   const parts = path.split("/").filter(Boolean);
   const name = WRAPPERS.has(parts[0]) ? parts[1] : parts[0];
   return name && !RESERVED.has(name) && /^\w{1,25}$/.test(name) ? name.toLowerCase() : null;
-}
-
-// Fallback when the page's CSP blocks the CDN: fetch as the extension and inline the bytes.
-function toDataUrl(url) {
-  if (!dataUrls.has(url)) {
-    const p = fetch(url)
-      .then((r) => r.blob())
-      .then((b) => new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result);
-        fr.onerror = reject;
-        fr.readAsDataURL(b);
-      }));
-    p.catch(() => dataUrls.delete(url));
-    dataUrls.set(url, p);
-  }
-  return dataUrls.get(url);
 }
 
 function makeImg(name, meta) {
@@ -36,7 +19,6 @@ function makeImg(name, meta) {
   img.alt = name;
   img.title = name;
   img.src = meta.url;
-  img.addEventListener("error", () => toDataUrl(meta.url).then((d) => { img.src = d; }).catch(() => {}), { once: true });
   return img;
 }
 
@@ -87,9 +69,18 @@ function render(fragment) {
 }
 
 function scan(root) {
-  if (!emotes?.size) return;
+  if (enabled !== true || !emotes?.size) return;
   if (root.matches?.(FRAGMENT)) render(root);
   root.querySelectorAll?.(FRAGMENT).forEach(render);
+}
+
+// Undo every replacement so chat shows the original text again.
+function restore() {
+  document.querySelectorAll(".ce-text").forEach((el) => el.remove());
+  document.querySelectorAll("[data-ce]").forEach((el) => {
+    el.classList.remove("ce-hidden");
+    delete el.dataset.ce;
+  });
 }
 
 async function load(name) {
@@ -105,6 +96,17 @@ async function load(name) {
     console.warn("[chat-emotes] could not load emotes", err);
   }
 }
+
+function applySetting(value) {
+  enabled = value !== false;
+  if (enabled) scan(document.body);
+  else restore();
+}
+
+browser.storage.local.get("enabled").then((s) => applySetting(s.enabled));
+browser.storage.onChanged.addListener((changes) => {
+  if (changes.enabled) applySetting(changes.enabled.newValue);
+});
 
 new MutationObserver((records) => {
   for (const r of records) for (const n of r.addedNodes) if (n.nodeType === 1) scan(n);
