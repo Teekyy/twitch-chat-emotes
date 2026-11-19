@@ -1,0 +1,32 @@
+{
+  "manifest_version": 2,
+  "name": "Chat Emotes",
+  "version": "0.1.0",
+  "description": "Replaces 7TV, BTTV and FFZ emote names in Twitch chat with the emote images.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "chat-emotes@local",
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "https://7tv.io/*",
+    "https://api.betterttv.net/*",
+    "https://api.frankerfacez.com/*",
+    "https://cdn.7tv.app/*",
+    "https://cdn.betterttv.net/*",
+    "https://cdn.frankerfacez.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.twitch.tv/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

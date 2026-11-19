@@ -1,0 +1,4 @@
+.ce-hidden { display: none !important; }
+.ce-emote { height: 28px; width: auto; max-width: none; vertical-align: middle; margin: -0.5rem 0; }
+.ce-stack { display: inline-grid; vertical-align: middle; }
+.ce-stack > .ce-emote { grid-area: 1 / 1; margin: -0.5rem 0; justify-self: center; }
