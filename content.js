@@ -83,18 +83,37 @@ function restore() {
   });
 }
 
-async function load(name) {
+// Lowest priority first; later layers win when names collide.
+const SOURCES = ["ffz", "bttv", "7tv"];
+const PARTS = ["global", "channel"];
+let layers = {};
+
+function rebuild() {
+  const list = [];
+  for (const part of PARTS) for (const src of SOURCES) list.push(...(layers[`${part}:${src}`] ?? []));
+  emotes = new Map(list);
+  document.querySelectorAll('[data-ce="0"]').forEach((el) => delete el.dataset.ce);
+  scan(document.body);
+}
+
+// Every list loads on its own and a failed one is retried alone, so a slow source never holds up the rest.
+async function loadList(name, src, part, attempt = 0) {
+  try {
+    const list = await browser.runtime.sendMessage({ type: "emotes", source: src, part, login: name });
+    if (login !== name) return;
+    layers[`${part}:${src}`] = list;
+    rebuild();
+  } catch (err) {
+    console.warn(`[chat-emotes] could not load ${src} ${part} emotes`, err);
+    if (attempt < 5) setTimeout(() => login === name && loadList(name, src, part, attempt + 1), 5000);
+  }
+}
+
+function load(name) {
   login = name;
   emotes = null;
-  if (!name) return;
-  try {
-    const list = await browser.runtime.sendMessage({ type: "emotes", login: name });
-    if (login !== name) return;
-    emotes = new Map(list);
-    scan(document.body);
-  } catch (err) {
-    console.warn("[chat-emotes] could not load emotes", err);
-  }
+  layers = {};
+  if (name) for (const src of SOURCES) for (const part of PARTS) loadList(name, src, part);
 }
 
 function applySetting(value) {

@@ -1,37 +1,34 @@
-// Fetches 7TV / BTTV / FFZ emote lists for a channel and hands them to the content script.
+// Fetches 7TV / BTTV / FFZ emote lists and hands them to the content script, one list per request.
 const TTL = 10 * 60 * 1000;
+const TIMEOUT = 5000;
 const cache = new Map();
 
-// Cached for TTL, but dropped if any request failed so a hiccup doesn't stick.
-async function memo(key, build) {
+// Cached for TTL per key; a failed request is dropped so the next ask tries again.
+function memo(key, build) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.value;
-  const ctx = { failed: false };
-  const value = build(ctx);
+  const value = build();
   cache.set(key, { at: Date.now(), value });
-  try {
-    const list = await value;
-    if (ctx.failed) cache.delete(key);
-    return list;
-  } catch (err) {
-    cache.delete(key);
-    throw err;
-  }
+  value.catch(() => cache.delete(key));
+  return value;
 }
 
 // A 404 means "no such channel/emotes" and is a valid empty answer, not a failure.
-async function getJSON(url, init) {
-  const res = await fetch(url, { credentials: "omit", ...init });
+async function fetchOnce(url, init) {
+  const res = await fetch(url, { credentials: "omit", signal: AbortSignal.timeout(TIMEOUT), ...init });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   return res.json();
 }
 
-const soft = (ctx, promise) =>
-  promise.catch(() => {
-    ctx.failed = true;
-    return null;
-  });
+// Each request retries once on its own.
+async function getJSON(url, init) {
+  try {
+    return await fetchOnce(url, init);
+  } catch {
+    return fetchOnce(url, init);
+  }
+}
 
 const abs = (u) => (u.startsWith("//") ? `https:${u}` : u);
 
@@ -61,52 +58,68 @@ function fromFfz(sets, ids) {
   return out;
 }
 
-const globalEmotes = () =>
-  memo("global", async (ctx) => {
-    const [s, b, f] = await Promise.all([
-      soft(ctx, getJSON("https://7tv.io/v3/emote-sets/global")),
-      soft(ctx, getJSON("https://api.betterttv.net/3/cached/emotes/global")),
-      soft(ctx, getJSON("https://api.frankerfacez.com/v1/set/global")),
-    ]);
-    // Later entries win, so list lowest priority first.
-    return [...fromFfz(f?.sets, f?.default_sets ?? []), ...fromBttv(b), ...from7tv(s)];
-  });
+const ffzRoom = (login) => memo(`ffz:room:${login}`, () => getJSON(`https://api.frankerfacez.com/v1/room/${login}`));
 
-async function twitchIdVia7tv(ctx, login) {
-  const data = await soft(
-    ctx,
-    getJSON("https://7tv.io/v3/gql", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: "query($q:String!){users(query:$q){username connections{id platform}}}",
-        variables: { q: login },
-      }),
-    })
-  );
+const idVia7tv = async (login) => {
+  const data = await getJSON("https://7tv.io/v3/gql", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: "query($q:String!){users(query:$q){username connections{id platform}}}",
+      variables: { q: login },
+    }),
+  });
   const user = data?.data?.users?.find((u) => u.username.toLowerCase() === login);
   return user?.connections?.find((c) => c.platform === "TWITCH")?.id ?? null;
-}
+};
 
-const channelEmotes = (login) =>
-  memo(`channel:${login}`, async (ctx) => {
-    const ffzRoom = await soft(ctx, getJSON(`https://api.frankerfacez.com/v1/room/${login}`));
-    const id = ffzRoom?.room?.twitch_id ?? (await twitchIdVia7tv(ctx, login));
-    if (!id) return [];
-    const [s, b] = await Promise.all([
-      soft(ctx, getJSON(`https://7tv.io/v3/users/twitch/${id}`)),
-      soft(ctx, getJSON(`https://api.betterttv.net/3/cached/users/twitch/${id}`)),
-    ]);
-    const ffz = ffzRoom ? fromFfz(ffzRoom.sets, [ffzRoom.room.set]) : [];
-    return [...ffz, ...fromBttv(b?.sharedEmotes), ...fromBttv(b?.channelEmotes), ...from7tv(s?.emote_set)];
+// 7TV first; FFZ only if 7TV doesn't know the channel or fails.
+const twitchId = (login) =>
+  memo(`id:${login}`, async () => {
+    try {
+      const id = await idVia7tv(login);
+      if (id) return id;
+    } catch {}
+    return (await ffzRoom(login))?.room?.twitch_id ?? null;
   });
+
+// Each source has a global list and a channel list, requested separately; the page layers them by priority.
+const sources = {
+  "7tv": {
+    global: async () => from7tv(await getJSON("https://7tv.io/v3/emote-sets/global")),
+    channel: async (login) => {
+      const id = await twitchId(login);
+      return id ? from7tv((await getJSON(`https://7tv.io/v3/users/twitch/${id}`))?.emote_set) : [];
+    },
+  },
+  bttv: {
+    global: async () => fromBttv(await getJSON("https://api.betterttv.net/3/cached/emotes/global")),
+    channel: async (login) => {
+      const id = await twitchId(login);
+      const d = id ? await getJSON(`https://api.betterttv.net/3/cached/users/twitch/${id}`) : null;
+      return [...fromBttv(d?.sharedEmotes), ...fromBttv(d?.channelEmotes)];
+    },
+  },
+  ffz: {
+    global: async () => {
+      const d = await getJSON("https://api.frankerfacez.com/v1/set/global");
+      return fromFfz(d?.sets, d?.default_sets ?? []);
+    },
+    channel: async (login) => {
+      const d = await ffzRoom(login);
+      return d ? fromFfz(d.sets, [d.room.set]) : [];
+    },
+  },
+};
 
 browser.runtime.onMessage.addListener(async (msg, sender) => {
   if (sender.id !== browser.runtime.id || msg?.type !== "emotes") return undefined;
   const login = String(msg.login ?? "").toLowerCase();
-  if (!/^[a-z0-9_]{1,25}$/.test(login)) return [];
-  const [g, c] = await Promise.all([globalEmotes(), channelEmotes(login)]);
-  return [...g, ...c];
+  const source = Object.hasOwn(sources, msg.source) ? sources[msg.source] : null;
+  if (!source || !/^[a-z0-9_]{1,25}$/.test(login)) return [];
+  if (msg.part === "global") return memo(`${msg.source}:global`, source.global);
+  if (msg.part === "channel") return memo(`${msg.source}:channel:${login}`, () => source.channel(login));
+  return [];
 });
 
 // Toolbar button: click to switch replacement on or off; the icon shows the state.
